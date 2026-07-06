@@ -4,16 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "LaunchRoblox"
-version = "0.1.1"
+version = "0.2.0"
 authors = [
   { name="noaclr", email="154766525+noaclr@users.noreply.github.com" },
 ]
 description = "A lightweight utility to programmatically authenticate and launch the Roblox client."
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.7"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 dependencies = [
