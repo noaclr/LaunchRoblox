@@ -1,7 +1,10 @@
 import os
+import logging
 from LaunchRoblox import launchRoblox, AuthenticationError
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s]: %(message)s")
+
     cookie = os.getenv(".ROBLOSECURITY", "_|WARNING:-DO-NOT-SHARE-THIS...")
     placeId = 2753915549 # Blox Fruits example
 

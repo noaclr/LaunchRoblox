@@ -18,6 +18,8 @@ pip install LaunchRoblox
 * **Private Server Support:** Automatically resolves VIP `linkCode` URLs into backend access codes.
 * **Instance Targeting:** Follow users into exact server UUIDs (`jobId`).
 * **Deployment Channels:** Test your game on specific Roblox bootstrapper channels (e.g., `zCanary`).
+* **Process Lifecycle Tracking:** Capture the running game instance thread to track execution status or block script endings.
+* **Native Multi-Instance Support:** Programmatically bypass Roblox's single-window mutation restriction on Windows to launch concurrent accounts.
 * **Built-in Logging:** Fully integrated with Python's native `logging` module for easy debugging.
 
 ---
@@ -73,6 +75,43 @@ launchRoblox(
     cookie=cookie, 
     channel="zCanary"
 )
+
+```
+
+### 5. Process Lifecycle Tracking
+
+`launchRoblox` returns a `RobloxProcess` object. You can use this to monitor the client's state, acquire its Process ID (PID), or halt your Python script until the game closes.
+
+```python
+from LaunchRoblox import launchRoblox
+
+gameProcess = launchRoblox(2753915549, "YOUR_COOKIE")
+
+if gameProcess:
+    print(f"Roblox client running on PID: {gameProcess.pid}")
+    
+    # Wait until the user closes the game window
+    gameProcess.wait()
+    print("Roblox has been closed!")
+
+```
+
+### 6. Native Multi-Instance Support (Windows Only)
+
+Set `multiInstance=True` to programmatically claim the system window handle mutex. This allows you to open separate, concurrent account sessions simultaneously without being blocked by the standard single-client limit.
+
+```python
+import time
+from LaunchRoblox import launchRoblox
+
+# Launch Account 1
+launchRoblox(2753915549, "COOKIE_ACCOUNT_1", multiInstance=True)
+
+# Brief pause to let the first client window stabilize
+time.sleep(3)
+
+# Launch Account 2 concurrently
+launchRoblox(2753915549, "COOKIE_ACCOUNT_2", multiInstance=True)
 
 ```
 
