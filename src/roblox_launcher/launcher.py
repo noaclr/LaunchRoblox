@@ -59,7 +59,6 @@ def launchRoblox(placeId, cookie):
     })
     
     encodedPlaceUrl = quote(f"https://www.roblox.com/Game/PlaceLauncher.ashx?{query}", safe="")
-    
     launchTime = int(time.time() * 1000)
     
     robloxURI = (
