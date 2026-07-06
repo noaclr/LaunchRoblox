@@ -19,7 +19,7 @@ def fetchAuthTicket(cookie: str) -> str:
     try:
         r = requests.get("https://auth.roblox.com/v1/client-assertion", cookies=cookies)
         rJson = r.json()
-    except (requests.RequestException, ValueError):
+    except (requests.RequestException, ValueError) as e:
         logger.error(f"Network failure during client assertion request: {e}")
         raise AuthenticationError("Failed to communicate with the Roblox auth API.")
 
