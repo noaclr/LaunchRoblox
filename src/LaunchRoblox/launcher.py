@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import httpx
 import psutil
 import ctypes
 import logging
@@ -200,4 +201,137 @@ def launchRoblox(placeId: int, cookie: str, linkCode: Optional[str] = None, jobI
         time.sleep(0.25)
 
     logger.warning("Roblox process launched but tracking polling window timed out.")
+    return None
+
+async def fetchAuthTicketAsync(cookie: str) -> str:
+    """Authenticates with the Roblox API and returns a hardware launch ticket asynchronously."""
+    cookies = {".ROBLOSECURITY": cookie}
+    logger.debug("Async: Requesting client assertion token from auth API...")
+
+    async with httpx.AsyncClient() as client:
+        try:
+            r = await client.get("https://auth.roblox.com/v1/client-assertion", cookies=cookies)
+            rJson = r.json()
+        except (httpx.RequestError, ValueError) as e:
+            logger.error(f"Async: Network failure during client assertion request: {e}")
+            raise AuthenticationError("Failed to communicate with the Roblox auth API.")
+        
+        if "clientAssertion" not in rJson:
+            errorMsg = rJson.get("errors", [{}])[0].get("message", r.text)
+            logger.warning(f"Async client assertion failed validation: {errorMsg}")
+            if "Authentication token is missing" in errorMsg:
+                raise AuthenticationError("You forgot to provide a valid .ROBLOSECURITY cookie.")
+            elif "User is not authenticated" in errorMsg:
+                raise AuthenticationError("You provided an invalid .ROBLOSECURITY cookie.")
+            raise AuthenticationError(f"API Error: {errorMsg}")
+        
+        clientAssertion = rJson["clientAssertion"]
+
+        logger.debug("Async: Generating fresh X-CSRF token...")
+        r = await client.post("https://auth.roblox.com/v2/logout", cookies=cookies)
+        csrfToken = r.headers.get("x-csrf-token")
+        if not csrfToken:
+            logger.error("Async: Failed to extract x-csrf-token from response headers.")
+            raise AuthenticationError("Could not retrieve x-csrf-token header.")
+        
+        payload = {"clientAssertion": clientAssertion}
+        headers = {"x-csrf-token": csrfToken, "Referer": "https://www.roblox.com/"}
+        
+        logger.debug("Async: Submitting token exchange for authentication ticket...")
+        r = await client.post("https://auth.roblox.com/v1/authentication-ticket", data=payload, cookies=cookies, headers=headers)
+        
+        authTicket = r.headers.get("rbx-authentication-ticket")
+        if not authTicket:
+            logger.error("Async authentication handshake completed but rbx-authentication-ticket header was missing.")
+            raise AuthenticationError("Failed to obtain rbx-authentication-ticket from response headers.")
+
+        return authTicket
+
+async def getAccessCodeAsync(placeId: int, linkCode: str, cookie: str) -> str:
+    """Resolves a public private server linkCode into an internal server accessCode GUID asynchronously."""
+    cookies = {".ROBLOSECURITY": cookie}
+    logger.info(f"Async: Resolving private server linkCode for Place ID {placeId}...")
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            r = await client.get(f"https://games.roblox.com/v1/games/{placeId}/private-servers?linkCode={linkCode}", cookies=cookies)
+            data = r.json()
+        except (httpx.RequestError, ValueError) as e:
+            logger.error(f"Async failure connecting to games API: {e}")
+            raise AuthenticationError("Failed to communicate with the Roblox games API.")
+
+        if "data" in data and len(data["data"]) > 0 and "accessCode" in data["data"][0]:
+            return data["data"][0]["accessCode"]
+            
+        logger.error(f"Async private server response structure invalid or unauthorized: {data}")
+        raise AuthenticationError(f"Could not resolve linkCode: {data}")
+
+async def launchRobloxAsync(
+    placeId: int, 
+    cookie: str, 
+    linkCode: Optional[str] = None, 
+    jobId: Optional[str] = None, 
+    channel: str = "",
+    multiInstance: bool = False
+) -> Optional[RobloxProcess]:
+    """Triggers the native system bootstrapper to launch Roblox asynchronously."""
+    if multiInstance:
+        maintainMultiInstance()
+
+    targetName = "RobloxPlayerBeta.exe" if sys.platform == "win32" else "RobloxPlayer"
+    existingPids: Set[int] = set()
+    try:
+        for proc in psutil.process_iter(["pid", "name"]):
+            if proc.info["name"] == targetName:
+                existingPids.add(proc.info["pid"])
+    except Exception as e:
+        logger.warning(f"Failed to index existing processes: {e}")
+
+    logger.info(f"Async: Preparing to launch client for Place ID: {placeId}")
+    queryData = {
+        "request": "RequestGame",
+        "browserTrackerId": "0",
+        "placeId": placeId,
+        "isPlayTogetherGame": "false",
+        "referredByPlayerId": 0,
+        "joinAttemptId": "",
+        "joinAttemptOrigin": "PlayButton",
+    }
+
+    if linkCode:
+        accessCode = await getAccessCodeAsync(placeId, linkCode, cookie)
+        queryData["request"] = "RequestPrivateGame"
+        queryData["linkCode"] = linkCode
+        queryData["accessCode"] = accessCode
+    elif jobId:
+        queryData["request"] = "RequestGameJob"
+        queryData["gameId"] = jobId
+    
+    query = urlencode(queryData)
+    encodedPlaceUrl = quote(f"https://www.roblox.com/Game/PlaceLauncher.ashx?{query}", safe="")
+    launchTime = int(time.time() * 1000)
+    authTicket = await fetchAuthTicketAsync(cookie)
+    
+    robloxURI = f"roblox-player:1+launchmode:play+gameinfo:{authTicket}+launchtime:{launchTime}+placelauncherurl:{encodedPlaceUrl}+browsertrackerid:0+robloxLocale:en_us+gameLocale:en_us"
+    if channel and channel.upper() != "LIVE":
+        robloxURI += f"+channel:{channel}"
+    robloxURI += "+LaunchExp:InApp"
+
+    if sys.platform == "win32":
+        os.startfile(robloxURI)
+    elif sys.platform == "darwin":
+        os.system(f"open '{robloxURI}'")
+    else:
+        os.system(f"xdg-open '{robloxURI}'")
+    
+    startTime = time.time()
+    import asyncio
+    while time.time() - startTime < 15:
+        try:
+            for proc in psutil.process_iter(["pid", "name"]):
+                if proc.info["name"] == targetName and proc.info["pid"] not in existingPids:
+                    return RobloxProcess(proc)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+        await asyncio.sleep(0.25)
     return None

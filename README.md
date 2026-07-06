@@ -20,6 +20,7 @@ pip install LaunchRoblox
 * **Deployment Channels:** Test your game on specific Roblox bootstrapper channels (e.g., `zCanary`).
 * **Process Lifecycle Tracking:** Capture the running game instance thread to track execution status or block script endings.
 * **Native Multi-Instance Support:** Programmatically bypass Roblox's single-window mutation restriction on Windows to launch concurrent accounts.
+* **Asynchronous Support:** Full async/await compatibility using httpx for non-blocking integrations like Discord bots or web frameworks.
 * **Built-in Logging:** Fully integrated with Python's native `logging` module for easy debugging.
 
 ---
@@ -112,6 +113,25 @@ time.sleep(3)
 
 # Launch Account 2 concurrently
 launchRoblox(2753915549, "COOKIE_ACCOUNT_2", multiInstance=True)
+
+```
+
+### 7. Asynchronous Launching
+
+For async environments, import and await `launchRobloxAsync`. This avoids blocking your application's main thread during network API validation steps.
+
+```python
+import asyncio
+from LaunchRoblox import launchRobloxAsync
+
+async def main():
+    gameProcess = await launchRobloxAsync(2753915549, "YOUR_COOKIE")
+    
+    if gameProcess:
+        print(f"Async launch successful. Tracking PID: {gameProcess.pid}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
 
 ```
 

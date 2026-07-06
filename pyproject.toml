@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "LaunchRoblox"
-version = "0.3.0"
+version = "0.4.0"
 authors = [
   { name="noaclr", email="154766525+noaclr@users.noreply.github.com" },
 ]
@@ -19,6 +19,7 @@ classifiers = [
 dependencies = [
     "requests>=2.25.0",
     "psutil>=5.0.0",
+    "httpx>=0.24.0",
 ]
 
 [project.urls]
